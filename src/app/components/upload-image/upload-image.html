@@ -1,0 +1,224 @@
+<div class="container my-4">
+  <div class="row g-4">
+    <!-- Left Side: Upload & Drag Drop -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100">
+        <div class="card-header bg-primary text-white fw-semibold py-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-cloud-arrow-up-fill me-2"></i>Upload Image</span>
+          <span *ngIf="selectedFile" class="badge bg-light text-primary">Ready to scan</span>
+        </div>
+
+        <div class="card-body p-4 d-flex flex-column">
+          <!-- Hidden Native File Input -->
+          <input
+            #fileInput
+            type="file"
+            class="d-none"
+            accept="image/*"
+            (change)="onFileSelected($event)"
+          />
+
+          <!-- Interactive Drag and Drop Zone -->
+          <div
+            class="drop-zone mb-3 d-flex flex-column align-items-center justify-content-center"
+            [class.dragging]="isDragging"
+            [class.has-image]="!!imageUrl"
+            (dragover)="onDragOver($event)"
+            (dragenter)="onDragEnter($event)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event)"
+            (click)="fileInput.click()"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="fileInput.click()"
+            (keydown.space)="fileInput.click(); $event.preventDefault()"
+          >
+            <!-- Overlay indicator when actively dragging over zone -->
+            <div *ngIf="isDragging" class="drag-active-indicator text-center animate-bounce">
+              <i class="bi bi-arrow-down-circle-fill text-success display-4"></i>
+              <h5 class="fw-bold mt-2 text-success">Drop Image Here</h5>
+              <p class="text-muted small mb-0">Release to upload image</p>
+            </div>
+
+            <!-- Content when NOT actively dragging -->
+            <ng-container *ngIf="!isDragging">
+              <!-- State A: No image selected yet -->
+              <div *ngIf="!imageUrl" class="text-center p-3">
+                <div class="upload-icon-wrapper mb-3">
+                  <i class="bi bi-cloud-arrow-up display-5 text-primary"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Drag & Drop Image Here</h5>
+                <p class="text-muted small mb-3">or click anywhere to browse files</p>
+                <div class="d-inline-flex gap-2 flex-wrap justify-content-center">
+                  <span class="badge bg-light text-secondary border">PNG</span>
+                  <span class="badge bg-light text-secondary border">JPG</span>
+                  <span class="badge bg-light text-secondary border">JPEG</span>
+                  <span class="badge bg-light text-secondary border">WEBP</span>
+                </div>
+              </div>
+
+              <!-- State B: Image is selected - show preview with drag-replace support -->
+              <div *ngIf="imageUrl" class="preview-content w-100 text-center">
+                <div class="preview-img-box mb-2 position-relative">
+                  <img
+                    [src]="imageUrl"
+                    class="img-fluid rounded-3 preview-img"
+                    alt="Selected preview"
+                  />
+                  <div class="preview-overlay d-flex flex-column align-items-center justify-content-center">
+                    <i class="bi bi-arrow-repeat fs-2 text-white mb-1"></i>
+                    <span class="badge bg-dark bg-opacity-75 text-white">Click or Drop new image to replace</span>
+                  </div>
+                </div>
+
+                <div class="file-info-badge d-flex align-items-center justify-content-between px-3 py-2 bg-light rounded-3 border">
+                  <div class="text-truncate me-2 text-start" style="max-width: 220px;">
+                    <i class="bi bi-file-earmark-image text-primary me-1"></i>
+                    <span class="fw-semibold small">{{ fileName }}</span>
+                  </div>
+                  <span class="badge bg-secondary-subtle text-secondary small">{{ fileSizeFormatted }}</span>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+
+          <!-- Actions below drop zone -->
+          <div class="mt-auto pt-2">
+            <div class="d-flex gap-2 mb-3" *ngIf="imageUrl">
+              <button
+                type="button"
+                class="btn btn-outline-primary btn-sm flex-fill"
+                (click)="fileInput.click()"
+              >
+                <i class="bi bi-folder2-open me-1"></i> Choose Another
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-danger btn-sm"
+                (click)="clearImageOnly($event)"
+                title="Remove selected image"
+              >
+                <i class="bi bi-trash3 me-1"></i> Remove
+              </button>
+            </div>
+
+            <!-- Scan Image Button -->
+            <button
+              class="btn btn-primary w-100 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2 shadow-sm"
+              [disabled]="!selectedFile || loading"
+              (click)="scanImage()"
+            >
+              <span *ngIf="loading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+              <i *ngIf="!loading" class="bi bi-magic"></i>
+              <span>{{ loading ? 'Extracting Text...' : 'Scan Image & Extract Text' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Side: Extracted Text & Stats -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 rounded-4 h-100">
+        <div class="card-header bg-success text-white fw-semibold py-3 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-file-text-fill me-2"></i>Extracted Text</span>
+          <span *ngIf="extractedText" class="badge bg-light text-success">
+            {{ words }} words
+          </span>
+        </div>
+
+        <div class="card-body p-4 d-flex flex-column">
+          <!-- OCR Progress Bar -->
+          <div *ngIf="loading" class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="fw-semibold text-primary small">
+                <i class="bi bi-gear-wide-connected me-1"></i> OCR Processing
+              </label>
+              <span class="badge bg-primary">{{ progress }}%</span>
+            </div>
+
+            <div class="progress" style="height: 10px;">
+              <div
+                class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                role="progressbar"
+                [style.width.%]="progress"
+                [attr.aria-valuenow]="progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Success Alert -->
+          <div *ngIf="!loading && extractedText" class="alert alert-success d-flex align-items-center py-2 px-3 mb-3">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <div>Text extracted successfully!</div>
+          </div>
+
+          <!-- Textarea for Extracted Output -->
+          <textarea
+            class="form-control flex-grow-1 font-monospace"
+            rows="10"
+            placeholder="Extracted text will appear here after scanning..."
+            [(ngModel)]="extractedText"
+            (ngModelChange)="onTextChange()"
+          ></textarea>
+
+          <!-- Text Statistics -->
+          <div class="row g-3 text-center mt-3">
+            <div class="col-4">
+              <div class="border rounded-3 p-2 bg-light stat-box">
+                <span class="text-muted small d-block">Characters</span>
+                <span class="h5 fw-bold mb-0 text-primary">{{ characters }}</span>
+              </div>
+            </div>
+
+            <div class="col-4">
+              <div class="border rounded-3 p-2 bg-light stat-box">
+                <span class="text-muted small d-block">Words</span>
+                <span class="h5 fw-bold mb-0 text-success">{{ words }}</span>
+              </div>
+            </div>
+
+            <div class="col-4">
+              <div class="border rounded-3 p-2 bg-light stat-box">
+                <span class="text-muted small d-block">Lines</span>
+                <span class="h5 fw-bold mb-0 text-info">{{ lines }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button
+              type="button"
+              class="btn btn-primary flex-fill"
+              ngxClipboard
+              [cbContent]="extractedText"
+              (cbOnSuccess)="copySuccess()"
+              [disabled]="!extractedText || loading"
+            >
+              <i class="bi bi-clipboard me-1"></i> Copy Text
+            </button>
+
+            <button
+              class="btn btn-outline-success flex-fill"
+              (click)="downloadText()"
+              [disabled]="!extractedText || loading"
+            >
+              <i class="bi bi-download me-1"></i> Download TXT
+            </button>
+
+            <button
+              class="btn btn-outline-danger"
+              (click)="clearAll()"
+              [disabled]="!selectedFile && !extractedText"
+            >
+              <i class="bi bi-trash3 me-1"></i> Clear All
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
